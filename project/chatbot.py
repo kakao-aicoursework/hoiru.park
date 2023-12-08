@@ -3,9 +3,35 @@ import openai
 import os
 import tkinter as tk
 from tkinter import scrolledtext
-import tkinter.filedialog as filedialog
 
 openai.api_key = os.environ['API_KEY']
+
+def prompt():
+    message_log = [
+        {
+            "role": "system",
+            "content": '''
+            안녕하세요. 카카오 챗봇 입니다. 질문에 대한 답을 해드릴께요."
+            '''
+        }
+    ]
+    functions = [
+        {
+            "name": "call_gpt",
+            "description": "kakaotalk chatbot",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "string",
+                        "description": "kakaotalk chatbot data",
+                    },
+                },
+                "required": ["data"],
+            },
+        }
+    ]
+    return message_log, functions
 
 def loadData(filepath):
     # txt 파일을 읽어서 데이터를 생성한다.
@@ -84,6 +110,7 @@ def show_popup_message(window, message):
     popup.update()
     return popup
 
+
 def send_message(message_log, functions, title, formatData, gpt_model="gpt-3.5-turbo", temperature=0.1):
     response = openai.ChatCompletion.create(
         model=gpt_model,
@@ -121,6 +148,60 @@ def send_message(message_log, functions, title, formatData, gpt_model="gpt-3.5-t
             temperature=temperature,
         )  # 함수 실행 결과를 GPT에 보내 새로운 답변 받아오기
     return response.choices[0].message.content
+
+
+def on_send(message_log, user_entry, window, conversation, functions, title, data):
+    user_input = user_entry.get()
+    user_entry.delete(0, tk.END)
+
+    if user_input.lower() == "quit":
+        window.destroy()
+        return
+
+    message_log.append({"role": "user", "content": user_input})
+    conversation.config(state=tk.NORMAL)  # 이동
+    conversation.insert(tk.END, f"You: {user_input}\n", "user")  # 이동
+    thinking_popup = show_popup_message(window, "처리중...")
+    window.update_idletasks()
+    # '생각 중...' 팝업 창이 반드시 화면에 나타나도록 강제로 설정하기
+    response = send_message(message_log, functions, title, data)
+    thinking_popup.destroy()
+
+    message_log.append({"role": "assistant", "content": response})
+
+    # 태그를 추가한 부분(1)
+    conversation.insert(tk.END, f"gpt assistant: {response}\n", "assistant")
+    conversation.config(state=tk.DISABLED)
+    # conversation을 수정하지 못하게 설정하기
+    conversation.see(tk.END)
+
+
+def chatbot_window(title, formatData):
+    messageLog, functions = prompt()
+
+    window = tk.Tk()
+    window.title("GPT AI")
+    font = ("맑은 고딕", 10)
+    conversation = scrolledtext.ScrolledText(window, wrap=tk.WORD, bg='#f0f0f0', font=font)
+    # width, height를 없애고 배경색 지정하기(2)
+    conversation.tag_configure("user", background="#c9daf8")
+    # 태그별로 다르게 배경색 지정하기(3)
+    conversation.tag_configure("assistant", background="#e4e4e4")
+    # 태그별로 다르게 배경색 지정하기(3)
+    conversation.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    # 창의 폭에 맞추어 크기 조정하기(4)
+    input_frame = tk.Frame(window)  # user_entry와 send_button을 담는 frame(5)
+    input_frame.pack(fill=tk.X, padx=10, pady=10)  # 창의 크기에 맞추어 조절하기(5)
+    user_entry = tk.Entry(input_frame)
+    user_entry.pack(fill=tk.X, side=tk.LEFT, expand=True)
+    send_button = tk.Button(input_frame, text="Send",
+                            command=on_send(messageLog, user_entry, window, conversation, functions, title, formatData))
+    send_button.pack(side=tk.RIGHT)
+    window.bind('<Return>',
+                lambda event: on_send(messageLog, user_entry, window, conversation, functions, title, formatData))
+    window.mainloop()
+
+
 def main():
     print("프로젝트 1단계 - 호출하기")
     # 1. 데이터 파일(project_data_카카오톡채널.txt)을 로딩하여 데이터를 생성한다
@@ -132,83 +213,7 @@ def main():
     # call_gpt(title, formatData[0:20])
 
     # 4. 질의는 prompt Engineering을 이용하여 효율성을 높인다.
-    # TODO 창 호출하는 부분 이쁘게 다듬자..
-    message_log = [
-        {
-            "role": "system",
-            "content": '''
-            안녕하세요. 카카오 챗봇 입니다. 질문에 대한 답을 해드릴께요."
-            '''
-        }
-    ]
-
-    functions = [
-        {
-            "name": "call_gpt",
-            "description": "kakaotalk chatbot",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "data": {
-                        "type": "string",
-                        "description": "kakaotalk chatbot data",
-                    },
-                },
-                "required": ["data"],
-            },
-        }
-    ]
-
-    def on_send():
-        user_input = user_entry.get()
-        user_entry.delete(0, tk.END)
-
-        if user_input.lower() == "quit":
-            window.destroy()
-            return
-
-        message_log.append({"role": "user", "content": user_input})
-        conversation.config(state=tk.NORMAL)  # 이동
-        conversation.insert(tk.END, f"You: {user_input}\n", "user")  # 이동
-        thinking_popup = show_popup_message(window, "처리중...")
-        window.update_idletasks()
-        # '생각 중...' 팝업 창이 반드시 화면에 나타나도록 강제로 설정하기
-        response = send_message(message_log, functions, title, formatData)
-        thinking_popup.destroy()
-
-        message_log.append({"role": "assistant", "content": response})
-
-        # 태그를 추가한 부분(1)
-        conversation.insert(tk.END, f"gpt assistant: {response}\n", "assistant")
-        conversation.config(state=tk.DISABLED)
-        # conversation을 수정하지 못하게 설정하기
-        conversation.see(tk.END)
-
-    window = tk.Tk()
-    window.title("GPT AI")
-
-    font = ("맑은 고딕", 10)
-
-    conversation = scrolledtext.ScrolledText(window, wrap=tk.WORD, bg='#f0f0f0', font=font)
-    # width, height를 없애고 배경색 지정하기(2)
-    conversation.tag_configure("user", background="#c9daf8")
-    # 태그별로 다르게 배경색 지정하기(3)
-    conversation.tag_configure("assistant", background="#e4e4e4")
-    # 태그별로 다르게 배경색 지정하기(3)
-    conversation.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-    # 창의 폭에 맞추어 크기 조정하기(4)
-
-    input_frame = tk.Frame(window)  # user_entry와 send_button을 담는 frame(5)
-    input_frame.pack(fill=tk.X, padx=10, pady=10)  # 창의 크기에 맞추어 조절하기(5)
-
-    user_entry = tk.Entry(input_frame)
-    user_entry.pack(fill=tk.X, side=tk.LEFT, expand=True)
-
-    send_button = tk.Button(input_frame, text="Send", command=on_send)
-    send_button.pack(side=tk.RIGHT)
-
-    window.bind('<Return>', lambda event: on_send())
-    window.mainloop()
+    chatbot_window(title, formatData)
 
 
 if __name__ == "__main__":
