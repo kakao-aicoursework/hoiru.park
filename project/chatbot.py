@@ -11,23 +11,26 @@ def prompt():
         {
             "role": "system",
             "content": '''
-            안녕하세요. 카카오 챗봇 입니다. 질문에 대한 답을 해드릴께요."
+            카카오챗봇으로 카카오챗봇에 대한 궁금한 점을 질문하는 봇입니다. 
+            예를 들어, "카카오챗봇은 무엇인가요?" 또는 "카카오챗봇은 어떻게 사용하나요?"와 같은 질문을 할 수 있습니다.
+            질문은 "quit"를 입력할 때까지 계속할 수 있습니다.
+            # function_call 호출 조건 : 질문이나 요구사항은 command 로 function_call 로 전달됩니다.
             '''
         }
     ]
     functions = [
         {
-            "name": "call_gpt",
-            "description": "kakaotalk chatbot",
+            "name": "kakao_chatbot",
+            "description": "kakaotalk chatbot information",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "data": {
+                    "command": {
                         "type": "string",
-                        "description": "kakaotalk chatbot data",
+                        "description": "질문 키워드",
                     },
                 },
-                "required": ["data"],
+                "required": ["command"],
             },
         }
     ]
@@ -46,7 +49,7 @@ def generateFormatData(data):
     # 테이블, json 형태가 좋음
     splitData = data.strip().split("#")
     title = splitData[0].strip().replace(":", "").replace("\n", "")
-    contents = []
+    dataset = {}
 
     for i in range(1, len(splitData)):
         term = splitData[i].strip().split("\n\n")
@@ -62,22 +65,25 @@ def generateFormatData(data):
                     subTitle = splitTerm[k]
                 else:
                     content = content + splitTerm[k]
-            contents.append({"subTitle": subTitle, "content": content})
-    return title, contents
+            dataset[subTitle] = content
+    return dataset
 
 
-def call_gpt(title, formatData):
+def kakao_chatbot(command):
+    # TODO vectorDB로 변경해야 함
+    data = loadData("./dataset/project_data_카카오톡채널.txt")
+    # TODO 좀더 정형화 및 포맷팅 해야 함, json으로 바꿔야 함
+    dataset = generateFormatData(data)
+    # TODO command 를 dataset 의 key 에 맞게끔 변경해야 함 / 또는 vectorDB 로 변경해야 함
     completion = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": f"당신은 {title} 전문가입니다. "},
-            {"role": "user", "content": f"{formatData}"},
-            {"role": "user", "content": f"{title} 이해하기"}
+            {"role": "user", "content": f"{dataset['기능 소개']}"},
         ],
         max_tokens=1024
     )
 
-    print(completion["choices"][0]["message"]["content"])
+    return completion["choices"][0]["message"]["content"]
 
 
 def show_popup_message(window, message):
@@ -111,7 +117,7 @@ def show_popup_message(window, message):
     return popup
 
 
-def send_message(message_log, functions, title, formatData, gpt_model="gpt-3.5-turbo", temperature=0.1):
+def send_message_to_gpt(message_log, functions, gpt_model="gpt-3.5-turbo", temperature=0.1):
     response = openai.ChatCompletion.create(
         model=gpt_model,
         messages=message_log,
@@ -124,7 +130,7 @@ def send_message(message_log, functions, title, formatData, gpt_model="gpt-3.5-t
 
     if response_message.get("function_call"):
         available_functions = {
-            "data": formatData[0:20],
+            "kakao_chatbot": kakao_chatbot,
         }
         function_name = response_message["function_call"]["name"]
         fuction_to_call = available_functions[function_name]
@@ -150,7 +156,7 @@ def send_message(message_log, functions, title, formatData, gpt_model="gpt-3.5-t
     return response.choices[0].message.content
 
 
-def on_send(message_log, user_entry, window, conversation, functions, title, data):
+def on_send(message_log, user_entry, window, conversation, functions):
     user_input = user_entry.get()
     user_entry.delete(0, tk.END)
 
@@ -164,7 +170,7 @@ def on_send(message_log, user_entry, window, conversation, functions, title, dat
     thinking_popup = show_popup_message(window, "처리중...")
     window.update_idletasks()
     # '생각 중...' 팝업 창이 반드시 화면에 나타나도록 강제로 설정하기
-    response = send_message(message_log, functions, title, data)
+    response = send_message_to_gpt(message_log, functions)
     thinking_popup.destroy()
 
     message_log.append({"role": "assistant", "content": response})
@@ -175,8 +181,7 @@ def on_send(message_log, user_entry, window, conversation, functions, title, dat
     # conversation을 수정하지 못하게 설정하기
     conversation.see(tk.END)
 
-
-def chatbot_window(title, formatData):
+def chatbot_window():
     messageLog, functions = prompt()
 
     window = tk.Tk()
@@ -195,25 +200,18 @@ def chatbot_window(title, formatData):
     user_entry = tk.Entry(input_frame)
     user_entry.pack(fill=tk.X, side=tk.LEFT, expand=True)
     send_button = tk.Button(input_frame, text="Send",
-                            command=on_send(messageLog, user_entry, window, conversation, functions, title, formatData))
+                            command=on_send(messageLog, user_entry, window, conversation, functions))
     send_button.pack(side=tk.RIGHT)
     window.bind('<Return>',
-                lambda event: on_send(messageLog, user_entry, window, conversation, functions, title, formatData))
+                lambda event: on_send(messageLog, user_entry, window, conversation, functions))
     window.mainloop()
 
 
 def main():
     print("프로젝트 1단계 - 호출하기")
-    # 1. 데이터 파일(project_data_카카오톡채널.txt)을 로딩하여 데이터를 생성한다
-    data = loadData("./dataset/project_data_카카오톡채널.txt")
-    # 2. 수집된 데이터를 정형화 시킨다.
-    # TODO 좀더 정형화 및 포맷팅 해야 함, json으로 바꿔야 함
-    title, formatData = generateFormatData(data)
-    # 3. chatGPT api를 이용하여 질의 응답이 가능한 모델을 구성한다.
-    # call_gpt(title, formatData[0:20])
 
-    # 4. 질의는 prompt Engineering을 이용하여 효율성을 높인다.
-    chatbot_window(title, formatData)
+    # call_gpt(title, formatData, "널 소개해줘")
+    chatbot_window()
 
 
 if __name__ == "__main__":
