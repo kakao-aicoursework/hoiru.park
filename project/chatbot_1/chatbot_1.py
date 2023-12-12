@@ -8,6 +8,7 @@ import chromadb
 
 openai.api_key = os.environ['API_KEY']
 
+
 def prompt():
     message_log = [
         {
@@ -38,6 +39,7 @@ def prompt():
     ]
     return message_log, functions
 
+
 def loadData(filepath):
     # txt 파일을 읽어서 데이터를 생성한다.
     file = open(filepath, "r", encoding="utf-8")
@@ -52,7 +54,7 @@ def generateFormatData(data):
     splitData = re.split(r'#([ㄱ-ㅣ가-힣\s]+\n)', data.strip())
     dataset = {}
 
-    subTitle = '제목' # default 제목
+    subTitle = '제목'  # default 제목
     for i in range(len(splitData)):
         data = splitData[i]
         if "\n\n" not in data:
@@ -176,6 +178,7 @@ def on_send(message_log, user_entry, window, conversation, functions):
     # conversation을 수정하지 못하게 설정하기
     conversation.see(tk.END)
 
+
 def chatbot_window():
     messageLog, functions = prompt()
 
@@ -218,9 +221,10 @@ def generateVectorDB(dataset):
         ids=ids,
     )
 
+
 def main():
     print("프로젝트 1단계 - 호출하기")
-    data = loadData("./dataset/project_data_카카오톡채널.txt")
+    data = loadData("../dataset/project_data_카카오톡채널.txt")
     dataset = generateFormatData(data)
     generateVectorDB(dataset)
     chatbot_window()

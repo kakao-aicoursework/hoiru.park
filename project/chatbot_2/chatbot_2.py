@@ -80,17 +80,17 @@ def request_gpt_api(prompt: str, gpt_model="gpt-3.5-turbo", max_token: int = 500
 
 
 def generate_sync_bot(param):
-    prompt_template = read_prompt_template('./template/kakao_sync_prompt_1.txt')
+    prompt_template = read_prompt_template('../template/kakao_sync_prompt_1.txt')
     prompt = prompt_template.format(
         kakao_sync_data=call_db(param),
         command=param,
     )
-    return {"assistant": request_gpt_api(prompt)}
+    return request_gpt_api(prompt)
 
 
 def main():
     print("프로젝트 2단계")
-    data = load_data("./dataset/project_data_카카오싱크.txt")
+    data = load_data("../dataset/project_data_카카오싱크.txt")
     dataset = generate_format_data(data)
     generate_vector_db(dataset)
     result = generate_sync_bot("카카오싱크 기능이 무엇이 있는지 설명해주세요")
