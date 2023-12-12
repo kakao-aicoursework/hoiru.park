@@ -7,7 +7,7 @@ from tkinter import scrolledtext
 import chromadb
 
 openai.api_key = os.environ['API_KEY']
-
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def prompt():
     message_log = [
