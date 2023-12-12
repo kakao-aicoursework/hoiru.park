@@ -1,9 +1,12 @@
-import json
 import openai
 import os
 import re
 import chromadb
+from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.prompts.chat import ChatPromptTemplate
+from langchain.chains import LLMChain
+from langchain.chains import SequentialChain
 
 openai.api_key = os.environ['API_KEY']
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -34,7 +37,7 @@ def generate_format_data(data):
 
 
 def generate_vector_db(dataset):
-    # TODO 한글이라 잘 안되는 것일까? 청크를 나눠보자
+    # TODO 한글이라 잘 안되는 것일까?
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=50)
     client = chromadb.PersistentClient()
     collection = client.get_or_create_collection(
@@ -48,9 +51,7 @@ def generate_vector_db(dataset):
         for text_index in range(len(texts)):
             ids.append(f"{k}_{text_index}")
             documents.append(f"{k}_{text_index}:{texts[text_index].strip().lower()}")
-        # ids.append(key.lower().replace(' ', '-'))
-        # document = f"{key}:{dataset[key].strip().lower()}"
-        # documents.append(document)
+
     collection.add(
         documents=documents,
         ids=ids,
@@ -88,12 +89,48 @@ def request_gpt_api(prompt: str, gpt_model="gpt-3.5-turbo", max_token: int = 500
 
 
 def generate_sync_bot(param):
-    prompt_template = read_prompt_template('../template/kakao_sync_prompt_1.txt')
-    prompt = prompt_template.format(
+    # ----------------- langchain 방식 -----------------##
+    lim = ChatOpenAI(temperature=0.8, max_tokens=300, model="gpt-3.5-turbo")
+
+    context_chain = create_chain(lim, '../template/kakao_sync_prompt_1.txt', 'context_output')
+    extra_info_chain = create_chain(lim, '../template/kakao_sync_prompt_2.txt', 'extra_output')
+
+    preprocess_chain = SequentialChain(
+        chains=[
+            context_chain,
+            extra_info_chain,
+        ],
+        input_variables=["kakao_sync_data", "command", "extra_link"],
+        output_variables=["context_output", "extra_output"],
+        verbose=True,
+    )
+
+    context = dict(
         kakao_sync_data=call_db(param),
         command=param,
+        extra_link=request_gpt_api("카카오 싱크 대표 링크 알려줘"),
     )
-    return request_gpt_api(prompt)
+    context = preprocess_chain(context)
+    return context["extra_output"]
+
+# ----------------- prompt 방식 (이전) -----------------##
+# prompt_template = read_prompt_template('../template/kakao_sync_prompt_1.txt')
+# prompt = prompt_template.format(
+#     kakao_sync_data=call_db(param),
+#     command=param,
+# )
+# return request_gpt_api(prompt)
+
+
+def create_chain(llm, template_path, output_key):
+    return LLMChain(
+        llm=llm,
+        prompt=ChatPromptTemplate.from_template(
+            template=read_prompt_template(template_path),
+        ),
+        output_key=output_key,
+        verbose=True,
+    )
 
 
 def main():
@@ -101,7 +138,7 @@ def main():
     data = load_data("../dataset/project_data_카카오싱크.txt")
     dataset = generate_format_data(data)
     generate_vector_db(dataset)
-    result = generate_sync_bot("시작 버튼이 뭐야?")
+    result = generate_sync_bot("기능은 뭐야?")
     print(result)
 
 
