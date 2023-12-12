@@ -3,6 +3,7 @@ import openai
 import os
 import re
 import chromadb
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 openai.api_key = os.environ['API_KEY']
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -33,16 +34,23 @@ def generate_format_data(data):
 
 
 def generate_vector_db(dataset):
-    # 한글이라 잘 안되는 것일까?
+    # TODO 한글이라 잘 안되는 것일까? 청크를 나눠보자
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=50)
     client = chromadb.PersistentClient()
     collection = client.get_or_create_collection(
         name="kakao_sync_bot")
     ids = []
     documents = []
+
     for key in dataset:
-        ids.append(key.lower().replace(' ', '-'))
-        document = f"{key}:{dataset[key].strip().lower()}"
-        documents.append(document)
+        k = key.lower().replace(' ', '-')
+        texts = text_splitter.split_text(dataset[key])
+        for text_index in range(len(texts)):
+            ids.append(f"{k}_{text_index}")
+            documents.append(f"{k}_{text_index}:{texts[text_index].strip().lower()}")
+        # ids.append(key.lower().replace(' ', '-'))
+        # document = f"{key}:{dataset[key].strip().lower()}"
+        # documents.append(document)
     collection.add(
         documents=documents,
         ids=ids,
@@ -93,7 +101,7 @@ def main():
     data = load_data("../dataset/project_data_카카오싱크.txt")
     dataset = generate_format_data(data)
     generate_vector_db(dataset)
-    result = generate_sync_bot("카카오싱크 기능이 무엇이 있는지 설명해주세요")
+    result = generate_sync_bot("시작 버튼이 뭐야?")
     print(result)
 
 
