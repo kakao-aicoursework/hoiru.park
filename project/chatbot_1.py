@@ -1,8 +1,10 @@
 import json
 import openai
 import os
+import re
 import tkinter as tk
 from tkinter import scrolledtext
+import chromadb
 
 openai.api_key = os.environ['API_KEY']
 
@@ -27,7 +29,7 @@ def prompt():
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "질문 키워드",
+                        "description": "질문을 하면 답변을 해줄 수 있습니다.",
                     },
                 },
                 "required": ["command"],
@@ -47,38 +49,31 @@ def loadData(filepath):
 
 def generateFormatData(data):
     # 테이블, json 형태가 좋음
-    splitData = data.strip().split("#")
-    title = splitData[0].strip().replace(":", "").replace("\n", "")
+    splitData = re.split(r'#([ㄱ-ㅣ가-힣\s]+\n)', data.strip())
     dataset = {}
 
-    for i in range(1, len(splitData)):
-        term = splitData[i].strip().split("\n\n")
-        if term == "":
-            continue
-        for j in range(len(term)):
-            if term[j] == "":
-                continue
-            splitTerm = term[j].strip().split("\n")
-            content = ''
-            for k in range(len(splitTerm)):
-                if k == 0:
-                    subTitle = splitTerm[k]
-                else:
-                    content = content + splitTerm[k]
-            dataset[subTitle] = content
+    subTitle = '제목' # default 제목
+    for i in range(len(splitData)):
+        data = splitData[i]
+        if "\n\n" not in data:
+            subTitle = data.strip()
+        else:
+            dataset[subTitle] = data.strip()
     return dataset
 
 
 def kakao_chatbot(command):
-    # TODO vectorDB로 변경해야 함
-    data = loadData("./dataset/project_data_카카오톡채널.txt")
-    # TODO 좀더 정형화 및 포맷팅 해야 함, json으로 바꿔야 함
-    dataset = generateFormatData(data)
-    # TODO command 를 dataset 의 key 에 맞게끔 변경해야 함 / 또는 vectorDB 로 변경해야 함
+    client = chromadb.PersistentClient()
+    collection = client.get_or_create_collection(
+        name="kakao_chatbot")
+    searchResult = collection.query(
+        query_texts=[command],
+        n_results=3)
+
     completion = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "user", "content": f"{dataset['기능 소개']}"},
+            {"role": "user", "content": f"{searchResult['documents']}"},
         ],
         max_tokens=1024
     )
@@ -207,10 +202,27 @@ def chatbot_window():
     window.mainloop()
 
 
+def generateVectorDB(dataset):
+    # 한글이라 잘 안되는 것일까?
+    client = chromadb.PersistentClient()
+    collection = client.get_or_create_collection(
+        name="kakao_chatbot")
+    ids = []
+    documents = []
+    for key in dataset:
+        ids.append(key.lower().replace(' ', '-'))
+        document = f"{key}:{dataset[key].strip().lower()}"
+        documents.append(document)
+    collection.add(
+        documents=documents,
+        ids=ids,
+    )
+
 def main():
     print("프로젝트 1단계 - 호출하기")
-
-    # call_gpt(title, formatData, "널 소개해줘")
+    data = loadData("./dataset/project_data_카카오톡채널.txt")
+    dataset = generateFormatData(data)
+    generateVectorDB(dataset)
     chatbot_window()
 
 
