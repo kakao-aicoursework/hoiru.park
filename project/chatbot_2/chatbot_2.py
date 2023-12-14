@@ -50,7 +50,7 @@ def generate_vector_db(dataset):
         texts = text_splitter.split_text(dataset[key])
         for text_index in range(len(texts)):
             ids.append(f"{k}_{text_index}")
-            documents.append(f"{k}_{text_index}:{texts[text_index].strip().lower()}")
+            documents.append(f"{texts[text_index].strip().lower()}")
 
     collection.add(
         documents=documents,
@@ -113,8 +113,9 @@ def generate_sync_bot(param):
     context = preprocess_chain(context)
     return context["extra_output"]
 
+
 # ----------------- prompt 방식 (이전) -----------------##
-# prompt_template = read_prompt_template('../template/kakao_sync_prompt_1.txt')
+# prompt_template = read_prompt_template('../template/bot_prompt_1.txt')
 # prompt = prompt_template.format(
 #     kakao_sync_data=call_db(param),
 #     command=param,
@@ -135,7 +136,7 @@ def create_chain(llm, template_path, output_key):
 
 def main():
     print("프로젝트 2단계")
-    data = load_data("../dataset/project_data_카카오싱크.txt")
+    data = load_data("../dataset/project_data_kakao_sync.txt")
     dataset = generate_format_data(data)
     generate_vector_db(dataset)
     result = generate_sync_bot("기능은 뭐야?")

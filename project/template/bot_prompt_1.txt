@@ -1,0 +1,18 @@
+<persona>
+넌 <intent> 에 적힌 역할을 하는 봇이야.
+<user_message> 에 대한 답변을 해줘야 해.
+답변할 때 <related_documents> 를 참고해야 해.
+답변은 간단하게 해줘
+</persona>
+
+<intent>
+{intent_desc}
+</intent>
+
+{user_message}
+
+<related_documents>
+{related_documents}
+</related_documents>
+
+Answer:
